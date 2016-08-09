@@ -142,6 +142,13 @@ options:
     required: false
     default: null
     aliases: []
+  user_data_gzip:
+    version_added: "2.2"
+    description:
+      - gzip the user_data before sending
+    required: false
+    default: 'false'
+    aliases: []
   instance_tags:
     version_added: "1.0"
     description:
@@ -578,6 +585,12 @@ EXAMPLES = '''
 
 '''
 
+try:
+    from cStringIO import StringIO
+except ImportError:
+    from StringIO import StringIO
+
+import gzip
 import time
 from ast import literal_eval
 
@@ -590,6 +603,13 @@ try:
 except ImportError:
     HAS_BOTO = False
 
+
+def gzip_string(string):
+    fp = StringIO()
+    gfp = gzip.GzipFile(fileobj=fp, mode='wb')
+    gfp.write(string)
+    gfp.close()
+    return fp.getvalue()
 
 def find_running_instances_by_count_tag(module, ec2, count_tag, zone=None):
 
@@ -886,6 +906,7 @@ def create_instances(module, ec2, vpc, override_count=None):
     spot_wait_timeout = int(module.params.get('spot_wait_timeout'))
     placement_group = module.params.get('placement_group')
     user_data = module.params.get('user_data')
+    user_data_gzip = module.params.get('user_data_gzip')
     instance_tags = module.params.get('instance_tags')
     vpc_subnet_id = module.params.get('vpc_subnet_id')
     assign_public_ip = module.boolean(module.params.get('assign_public_ip'))
@@ -900,6 +921,9 @@ def create_instances(module, ec2, vpc, override_count=None):
     network_interfaces = module.params.get('network_interfaces')
     spot_launch_group = module.params.get('spot_launch_group')
     instance_initiated_shutdown_behavior = module.params.get('instance_initiated_shutdown_behavior')
+
+    if user_data and user_data_gzip:
+        user_data = gzip_string(user_data)
 
     # group_id and group_name are exclusive of each other
     if group_id and group_name:
@@ -1446,6 +1470,7 @@ def main():
             spot_wait_timeout = dict(default=600),
             placement_group = dict(),
             user_data = dict(),
+            user_data_gzip = dict(type='bool', default=False),
             instance_tags = dict(type='dict'),
             vpc_subnet_id = dict(),
             assign_public_ip = dict(type='bool', default=False),
